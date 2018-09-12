@@ -100,8 +100,9 @@ class NeuralNetwork(object):
         return grads
 
 
-    def fit(self, X, y, learning_rate, num_iterations, batch_size=128):
+    def fit(self, X, y, learning_rate, num_iterations, batch_size=128, validation_set=None):
         errors = []
+        val_errors = []
         for _ in range(num_iterations):
 
             # shuffle the data
@@ -115,6 +116,14 @@ class NeuralNetwork(object):
             batch_y = [shuffle_y[:, i:i+batch_size] for i in range(0, shuffle_y.shape[1], batch_size)]
 
             for _X, _y in zip(batch_X, batch_y):
+
+                # validation error calculation
+                if validation_set:
+                    val_X = validation_set[0]
+                    val_y = validation_set[1]
+                    val_pred = self.feed_forward(val_X)
+                    val_error = self.calculate_cost(val_pred, val_y)
+                    val_errors.append(val_error)
 
                 # feed forward
                 prediction = self.feed_forward(_X)
@@ -133,7 +142,7 @@ class NeuralNetwork(object):
 
             print("Iteration: {}  |  Error: {}".format(_, error))
 
-        return errors
+        return errors, val_errors
 
 
     def evaluate(self, test_data, test_labels):
@@ -152,19 +161,28 @@ if __name__ == "__main__":
     X_train, X_val, y_train, y_val = pre_process_dataset("train.csv")
 
     model = NeuralNetwork([784, 100, 10])
-    errors = model.fit(X_train, y_train, learning_rate=0.4, num_iterations=10)
+
+    errors, val_errors = model.fit(X_train, y_train, learning_rate=0.4, num_iterations=5)
+
+    # training + validation, take longer times
+    # errors, val_errors = model.fit(X_train, y_train, learning_rate=0.4, num_iterations=5, validation_set=(X_val, y_val))
 
     # evaluate accuracy
+    training_accuracy = model.evaluate(X_train, y_train)
+    print("Training Accuracy: ", training_accuracy)
+
     accuracy = model.evaluate(X_val, y_val)
-    print("Accuracy: ", accuracy)
+    print("Validation Accuracy: ", accuracy)
 
     # save model
     filename = "NN_" + str(accuracy)
     pickle.dump(model, open(filename, "wb"))
 
     # error graph
-    plt.title("Training Errors")
-    plt.plot(errors)
+    plt.title("Errors")
+    plt.plot(errors, label="Training")
+    plt.plot(val_errors, label="Validation")
+    plt.legend()
     plt.xlabel("Batches")
     plt.ylabel("Errors")
     plt.show()
