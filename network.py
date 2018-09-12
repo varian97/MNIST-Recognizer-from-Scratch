@@ -1,5 +1,7 @@
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
+import pickle
 from sklearn.model_selection import train_test_split
 
 
@@ -98,14 +100,20 @@ class NeuralNetwork(object):
         return grads
 
 
-    def fit(self, X, y, learning_rate, num_iterations):
+    def fit(self, X, y, learning_rate, num_iterations, verbose=False):
+        errors = []
         for _ in range(num_iterations):
             # feed forward
             prediction = self.feed_forward(X)
 
             # error calculation
-            if _ % 100 == 0:
-                error = self.calculate_cost(prediction, y)
+            error = self.calculate_cost(prediction, y)
+            errors.append(error)
+
+            if not verbose:
+                if _ % (0.1 * num_iterations) == 0:
+                    print("Iteration: {}  |  Error: {}".format(_, error))
+            else:
                 print("Iteration: {}  |  Error: {}".format(_, error))
 
             # backpropagation
@@ -116,7 +124,7 @@ class NeuralNetwork(object):
                 self.parameters["W" + str(i + 1)] -= learning_rate * grads["dW" + str(i + 1)]
                 self.parameters["b" + str(i + 1)] -= learning_rate * grads["db" + str(i + 1)]
 
-        return 1
+        return errors
 
 
     def evaluate(self, test_data, test_labels):
@@ -134,8 +142,20 @@ if __name__ == "__main__":
 
     X_train, X_test, y_train, y_test = pre_process_dataset("train.csv")
 
-    model = NeuralNetwork([784, 100, 100, 10])
-    model.fit(X_train, y_train, learning_rate=0.1, num_iterations=1000)
+    model = NeuralNetwork([784, 100, 10])
+    errors = model.fit(X_train, y_train, learning_rate=0.4, num_iterations=100)
 
+    # evaluate accuracy
     accuracy = model.evaluate(X_test, y_test)
     print("Accuracy: ", accuracy)
+
+    # save model
+    filename = "NN_" + str(accuracy)
+    pickle.dump(model, open(filename, "wb"))
+
+    # error graph
+    plt.title("Training Errors")
+    plt.plot(errors)
+    plt.xlabel("Iterations")
+    plt.ylabel("Errors")
+    plt.show()
