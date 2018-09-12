@@ -100,29 +100,38 @@ class NeuralNetwork(object):
         return grads
 
 
-    def fit(self, X, y, learning_rate, num_iterations, verbose=False):
+    def fit(self, X, y, learning_rate, num_iterations, batch_size=128):
         errors = []
         for _ in range(num_iterations):
-            # feed forward
-            prediction = self.feed_forward(X)
 
-            # error calculation
-            error = self.calculate_cost(prediction, y)
-            errors.append(error)
+            # shuffle the data
+            s = np.arange(X.shape[1])
+            np.random.shuffle(s)
+            shuffle_X = X[:, s]
+            shuffle_y = y[:, s]
 
-            if not verbose:
-                if _ % (0.1 * num_iterations) == 0:
-                    print("Iteration: {}  |  Error: {}".format(_, error))
-            else:
-                print("Iteration: {}  |  Error: {}".format(_, error))
+            # partition the data into mini-batches
+            batch_X = [shuffle_X[:, i:i+batch_size] for i in range(0, shuffle_X.shape[1], batch_size)]
+            batch_y = [shuffle_y[:, i:i+batch_size] for i in range(0, shuffle_y.shape[1], batch_size)]
 
-            # backpropagation
-            grads = self.backward_propagation(prediction, y)
+            for _X, _y in zip(batch_X, batch_y):
 
-            # update parameters
-            for i in range(self.size):
-                self.parameters["W" + str(i + 1)] -= learning_rate * grads["dW" + str(i + 1)]
-                self.parameters["b" + str(i + 1)] -= learning_rate * grads["db" + str(i + 1)]
+                # feed forward
+                prediction = self.feed_forward(_X)
+
+                # error calculation
+                error = self.calculate_cost(prediction, _y)
+                errors.append(error)
+
+                # backpropagation
+                grads = self.backward_propagation(prediction, _y)
+
+                # update parameters
+                for i in range(self.size):
+                    self.parameters["W" + str(i + 1)] -= learning_rate * grads["dW" + str(i + 1)]
+                    self.parameters["b" + str(i + 1)] -= learning_rate * grads["db" + str(i + 1)]
+
+            print("Iteration: {}  |  Error: {}".format(_, error))
 
         return errors
 
@@ -140,13 +149,13 @@ class NeuralNetwork(object):
 if __name__ == "__main__":
     np.random.seed(23)
 
-    X_train, X_test, y_train, y_test = pre_process_dataset("train.csv")
+    X_train, X_val, y_train, y_val = pre_process_dataset("train.csv")
 
     model = NeuralNetwork([784, 100, 10])
-    errors = model.fit(X_train, y_train, learning_rate=0.4, num_iterations=100)
+    errors = model.fit(X_train, y_train, learning_rate=0.4, num_iterations=10)
 
     # evaluate accuracy
-    accuracy = model.evaluate(X_test, y_test)
+    accuracy = model.evaluate(X_val, y_val)
     print("Accuracy: ", accuracy)
 
     # save model
@@ -156,6 +165,6 @@ if __name__ == "__main__":
     # error graph
     plt.title("Training Errors")
     plt.plot(errors)
-    plt.xlabel("Iterations")
+    plt.xlabel("Batches")
     plt.ylabel("Errors")
     plt.show()
