@@ -41,29 +41,27 @@ def pre_process_dataset(path):
 
 
 class NeuralNetwork(object):
-    W = []
-    b = []
-    A = []
-    Z = []
+
+    parameters = {}
+    cache = {}
     size = 0
 
 
     def __init__(self, layer):
-        self.W = [np.random.randn(j, i) * 0.01 for i, j in zip(layer[:-1], layer[1:])]
-        self.b = [np.zeros((i, 1)) for i in layer[1:]]
         self.size = len(layer) - 1
+        for i in range(1, len(layer)):
+            self.parameters["W" + str(i)] = np.random.randn(layer[i], layer[i-1]) * 0.01
+            self.parameters["b" + str(i)] = np.zeros((layer[i], 1))
 
 
     def feed_forward(self, X):
-        self.A = []
-        self.Z = []
+        self.cache = {}
 
-        # append the X as A0 and Z0 (padding)
-        self.A.append(X)
-        self.Z.append(X)
+        # append the X as A0
+        self.cache["A0"] = X
 
         for i in range(self.size):
-            z = np.dot(self.W[i], self.A[-1]) + self.b[i]
+            z = np.dot(self.parameters["W" + str(i + 1)], self.cache["A" + str(i)]) + self.parameters["b" + str(i + 1)]
 
             # relu or sigmoid
             if i == self.size - 1:
@@ -71,10 +69,10 @@ class NeuralNetwork(object):
             else:
                 a = relu(z)
 
-            self.Z.append(z)
-            self.A.append(a)
+            self.cache["Z" + str(i + 1)] = z
+            self.cache["A" + str(i + 1)] = a
 
-        return self.A[-1]
+        return self.cache["A" + str(self.size)]
 
 
     def calculate_cost(self, AL, y):
@@ -92,9 +90,9 @@ class NeuralNetwork(object):
             if i == self.size - 1:
                 grads["dZ" + str(i + 1)] = AL - y
             else:
-                grads["dZ" + str(i + 1)] = np.dot(self.W[i + 1].T, grads["dZ" + str(i + 2)]) * relu(self.Z[i+1], deriv=True)
+                grads["dZ" + str(i + 1)] = np.dot(self.parameters["W" + str(i + 2)].T, grads["dZ" + str(i + 2)]) * relu(self.cache["Z" + str(i + 1)], deriv=True)
 
-            grads["dW" + str(i + 1)] = np.dot(grads["dZ" + str(i + 1)], self.A[i].T) / m
+            grads["dW" + str(i + 1)] = np.dot(grads["dZ" + str(i + 1)], self.cache["A" + str(i)].T) / m
             grads["db" + str(i + 1)] = np.sum(grads["dZ" + str(i + 1)], axis=1, keepdims=True) / m
 
         return grads
@@ -106,16 +104,18 @@ class NeuralNetwork(object):
             prediction = self.feed_forward(X)
 
             # error calculation
-            error = self.calculate_cost(prediction, y)
-            print("Iteration: {}  |  Error: {}".format(_, error))
+            if _ % 100 == 0:
+                error = self.calculate_cost(prediction, y)
+                print("Iteration: {}  |  Error: {}".format(_, error))
 
             # backpropagation
             grads = self.backward_propagation(prediction, y)
 
             # update parameters
-            for i in range(len(self.W)):
-                self.W[i] -= learning_rate * grads["dW" + str(i + 1)]
-                self.b[i] -= learning_rate * grads["db" + str(i + 1)]
+            for i in range(self.size):
+                self.parameters["W" + str(i + 1)] -= learning_rate * grads["dW" + str(i + 1)]
+                self.parameters["b" + str(i + 1)] -= learning_rate * grads["db" + str(i + 1)]
+
         return 1
 
 
@@ -134,8 +134,8 @@ if __name__ == "__main__":
 
     X_train, X_test, y_train, y_test = pre_process_dataset("train.csv")
 
-    model = NeuralNetwork([784, 150, 10])
-    model.fit(X_train, y_train, learning_rate=0.3, num_iterations=100)
+    model = NeuralNetwork([784, 100, 100, 10])
+    model.fit(X_train, y_train, learning_rate=0.1, num_iterations=1000)
 
     accuracy = model.evaluate(X_test, y_test)
     print("Accuracy: ", accuracy)
