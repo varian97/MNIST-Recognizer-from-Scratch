@@ -184,7 +184,7 @@ class NeuralNetwork(object):
 
 
     def fit(self, X, y, learning_rate, num_iterations, batch_size=128, validation_set=None, beta1=0.9, 
-            beta2=0.999, epsilon=1e-8, optimizer="gd"):
+            beta2=0.999, epsilon=1e-8, decay=0, optimizer="gd"):
         errors = []
         val_errors = []
         t = 0
@@ -209,6 +209,9 @@ class NeuralNetwork(object):
             batch_X = [shuffle_X[:, i:i+batch_size] for i in range(0, shuffle_X.shape[1], batch_size)]
             batch_y = [shuffle_y[:, i:i+batch_size] for i in range(0, shuffle_y.shape[1], batch_size)]
 
+            # weight decay
+            decay_lr = learning_rate / (1 + decay * _)
+
             # batch training
             for _X, _y in zip(batch_X, batch_y):
                 # validation error calculation
@@ -231,14 +234,14 @@ class NeuralNetwork(object):
 
                 # update parameters
                 if optimizer == "gd":
-                    self.parameters = update_with_gd(self.parameters, grads, learning_rate)
+                    self.parameters = update_with_gd(self.parameters, grads, decay_lr)
                 elif optimizer == "momentum":
-                    self.parameters, v = update_with_momentum(self.parameters, v, grads, beta1, learning_rate)
+                    self.parameters, v = update_with_momentum(self.parameters, v, grads, beta1, decay_lr)
                 elif optimizer == "rmsprop":
-                    self.parameters, s = update_with_rmsprop(self.parameters, s, grads, beta2, epsilon, learning_rate)
+                    self.parameters, s = update_with_rmsprop(self.parameters, s, grads, beta2, epsilon, decay_lr)
                 elif optimizer == "adam":
                     t += 1
-                    self.parameters, v, s = update_with_adam(self.parameters, v, s, grads, beta1, beta2, epsilon, learning_rate, t)
+                    self.parameters, v, s = update_with_adam(self.parameters, v, s, grads, beta1, beta2, epsilon, decay_lr, t)
 
             print("Iteration: {}  |  Error: {}".format(_, error))
 
