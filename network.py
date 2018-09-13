@@ -42,6 +42,63 @@ def pre_process_dataset(path):
     return X_train, X_test, y_train, y_test
 
 
+def update_with_gd(parameters, grads, learning_rate):
+    l = len(parameters) // 2
+
+    for i in range(l):
+        parameters["W" + str(i + 1)] -= learning_rate * grads["dW" + str(i + 1)]
+        parameters["b" + str(i + 1)] -= learning_rate * grads["db" + str(i + 1)]
+
+    return parameters
+
+
+def initialize_momentum(parameters):
+    # momentum initialization
+    l = len(parameters) // 2
+    v = {}
+    for i in range(l):
+        v["Vdw" + str(i + 1)] = np.zeros((parameters["W" + str(i + 1)].shape[0], parameters["W" + str(i + 1)].shape[1]))
+        v["Vdb" + str(i + 1)] = np.zeros((parameters["b" + str(i + 1)].shape[0], 1))
+
+    return v
+
+
+def update_with_momentum(parameters, v, grads, beta1, learning_rate):
+    l = len(parameters) // 2
+
+    for i in range(l):
+        v["Vdw" + str(i + 1)] = v["Vdw" + str(i + 1)] * beta1 + (1 - beta1) * grads["dW" + str(i + 1)]
+        v["Vdb" + str(i + 1)] = v["Vdb" + str(i + 1)] * beta1 + (1 - beta1) * grads["db" + str(i + 1)]
+
+        parameters["W" + str(i + 1)] -= learning_rate * v["Vdw" + str(i + 1)]
+        parameters["b" + str(i + 1)] -= learning_rate * v["Vdb" + str(i + 1)]
+
+    return parameters, v
+
+
+def initialize_rmsprop(parameters):
+    l = len(parameters) // 2
+    s = {}
+    for i in range(l):
+        s["Sdw" + str(i + 1)] = np.zeros((parameters["W" + str(i + 1)].shape[0], parameters["W" + str(i + 1)].shape[1]))
+        s["Sdb" + str(i + 1)] = np.zeros((parameters["b" + str(i + 1)].shape[0], 1))
+
+    return s
+
+
+def update_with_rmsprop(parameters, s, grads, beta2, epsilon, learning_rate):
+    l = len(parameters) // 2
+
+    for i in range(l):
+        s["Sdw" + str(i + 1)] = s["Sdw" + str(i + 1)] * beta2 + (1 - beta2) * np.multiply(grads["dW" + str(i+1)], grads["dW" + str(i+1)])
+        s["Sdb" + str(i + 1)] = s["Sdb" + str(i + 1)] * beta2 + (1 - beta2) * np.multiply(grads["db" + str(i+1)], grads["db" + str(i+1)])
+
+        parameters["W" + str(i + 1)] -= learning_rate * grads["dW" + str(i + 1)] / (np.sqrt(s["Sdw" + str(i + 1)]) + epsilon)
+        parameters["b" + str(i + 1)] -= learning_rate * grads["db" + str(i + 1)] / (np.sqrt(s["Sdb" + str(i + 1)]) + epsilon)
+
+    return parameters, s 
+
+
 class NeuralNetwork(object):
 
     parameters = {}
@@ -100,27 +157,27 @@ class NeuralNetwork(object):
         return grads
 
 
-    def fit(self, X, y, learning_rate, num_iterations, batch_size=128, validation_set=None, momentum=0.9):
+    def fit(self, X, y, learning_rate, num_iterations, batch_size=128, validation_set=None, beta1=0.9, 
+            beta2=0.999, epsilon=1e-8, optimizer="gd"):
         errors = []
         val_errors = []
-        for _ in range(num_iterations):
 
+        # initialize momentum
+        if optimizer == "momentum":
+            v = initialize_momentum(self.parameters)
+        elif optimizer == "rmsprop":
+            s = initialize_rmsprop(self.parameters)
+
+        for _ in range(num_iterations):
             # shuffle the data
-            s = np.arange(X.shape[1])
-            np.random.shuffle(s)
-            shuffle_X = X[:, s]
-            shuffle_y = y[:, s]
+            shuffle = np.arange(X.shape[1])
+            np.random.shuffle(shuffle)
+            shuffle_X = X[:, shuffle]
+            shuffle_y = y[:, shuffle]
 
             # partition the data into mini-batches
             batch_X = [shuffle_X[:, i:i+batch_size] for i in range(0, shuffle_X.shape[1], batch_size)]
             batch_y = [shuffle_y[:, i:i+batch_size] for i in range(0, shuffle_y.shape[1], batch_size)]
-
-            # momentum initialization
-            vdw = {}
-            vdb = {}
-            for i in range(self.size):
-                vdw["Vdw" + str(i + 1)] = np.zeros((self.parameters["W" + str(i + 1)].shape[0], self.parameters["W" + str(i + 1)].shape[1]))
-                vdb["Vdb" + str(i + 1)] = np.zeros((self.parameters["b" + str(i + 1)].shape[0], 1))
 
             # batch training
             for _X, _y in zip(batch_X, batch_y):
@@ -143,13 +200,12 @@ class NeuralNetwork(object):
                 grads = self.backward_propagation(prediction, _y)
 
                 # update parameters
-                for i in range(self.size):
-                    # weighted average (momentum update)
-                    vdw["Vdw" + str(i + 1)] = vdw["Vdw" + str(i + 1)] * momentum + (1 - momentum) * grads["dW" + str(i + 1)]
-                    vdb["Vdb" + str(i + 1)] = vdb["Vdb" + str(i + 1)] * momentum + (1 - momentum) * grads["db" + str(i + 1)]
-
-                    self.parameters["W" + str(i + 1)] -= learning_rate * vdw["Vdw" + str(i + 1)]
-                    self.parameters["b" + str(i + 1)] -= learning_rate * vdb["Vdb" + str(i + 1)]
+                if optimizer == "gd":
+                    self.parameters = update_with_gd(self.parameters, grads, learning_rate)
+                elif optimizer == "momentum":
+                    self.parameters, v = update_with_momentum(self.parameters, v, grads, beta1, learning_rate)
+                elif optimizer == "rmsprop":
+                    self.parameters, s = update_with_rmsprop(self.parameters, s, grads, beta2, epsilon, learning_rate)
 
             print("Iteration: {}  |  Error: {}".format(_, error))
 
@@ -173,7 +229,7 @@ if __name__ == "__main__":
 
     model = NeuralNetwork([784, 100, 100, 10])
 
-    errors, val_errors = model.fit(X_train, y_train, learning_rate=0.4, num_iterations=5)
+    errors, val_errors = model.fit(X_train, y_train, learning_rate=0.4, num_iterations=5, optimizer="momentum")
 
     # training + validation, take longer times
     # errors, val_errors = model.fit(X_train, y_train, learning_rate=0.4, num_iterations=5, validation_set=(X_val, y_val))
