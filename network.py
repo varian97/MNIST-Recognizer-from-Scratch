@@ -99,6 +99,32 @@ def update_with_rmsprop(parameters, s, grads, beta2, epsilon, learning_rate):
     return parameters, s 
 
 
+def update_with_adam(parameters, v, s, grads, beta1, beta2, epsilon, learning_rate, t):
+    v_corrected = {}
+    s_corrected = {}
+    l = len(parameters) // 2
+
+    for i in range(l):
+        v["Vdw" + str(i + 1)] = v["Vdw" + str(i + 1)] * beta1 + (1 - beta1) * grads["dW" + str(i + 1)]
+        v["Vdb" + str(i + 1)] = v["Vdb" + str(i + 1)] * beta1 + (1 - beta1) * grads["db" + str(i + 1)]
+
+        s["Sdw" + str(i + 1)] = s["Sdw" + str(i + 1)] * beta2 + (1 - beta2) * np.multiply(grads["dW" + str(i+1)], grads["dW" + str(i+1)])
+        s["Sdb" + str(i + 1)] = s["Sdb" + str(i + 1)] * beta2 + (1 - beta2) * np.multiply(grads["db" + str(i+1)], grads["db" + str(i+1)])
+
+        # bias correction
+        v_corrected["Vdw" + str(i + 1)] = v["Vdw" + str(i + 1)] / (1 - np.power(beta1, t)) 
+        v_corrected["Vdb" + str(i + 1)] = v["Vdb" + str(i + 1)] / (1 - np.power(beta1, t))
+
+        s_corrected["Sdw" + str(i + 1)] = s["Sdw" + str(i + 1)] / (1 - np.power(beta2, t))
+        s_corrected["Sdb" + str(i + 1)] = s["Sdb" + str(i + 1)] / (1 - np.power(beta2, t))
+
+        # update parameters
+        parameters["W" + str(i + 1)] -= learning_rate * v_corrected["Vdw" + str(i + 1)] / (np.sqrt(s["Sdw" + str(i + 1)]) + epsilon)
+        parameters["b" + str(i + 1)] -= learning_rate * v_corrected["Vdb" + str(i + 1)] / (np.sqrt(s["Sdb" + str(i + 1)]) + epsilon)
+
+    return parameters, v, s
+
+
 class NeuralNetwork(object):
 
     parameters = {}
@@ -161,11 +187,15 @@ class NeuralNetwork(object):
             beta2=0.999, epsilon=1e-8, optimizer="gd"):
         errors = []
         val_errors = []
+        t = 0
 
         # initialize momentum
         if optimizer == "momentum":
             v = initialize_momentum(self.parameters)
         elif optimizer == "rmsprop":
+            s = initialize_rmsprop(self.parameters)
+        elif optimizer == "adam":
+            v = initialize_momentum(self.parameters)
             s = initialize_rmsprop(self.parameters)
 
         for _ in range(num_iterations):
@@ -206,6 +236,9 @@ class NeuralNetwork(object):
                     self.parameters, v = update_with_momentum(self.parameters, v, grads, beta1, learning_rate)
                 elif optimizer == "rmsprop":
                     self.parameters, s = update_with_rmsprop(self.parameters, s, grads, beta2, epsilon, learning_rate)
+                elif optimizer == "adam":
+                    t += 1
+                    self.parameters, v, s = update_with_adam(self.parameters, v, s, grads, beta1, beta2, epsilon, learning_rate, t)
 
             print("Iteration: {}  |  Error: {}".format(_, error))
 
@@ -229,7 +262,7 @@ if __name__ == "__main__":
 
     model = NeuralNetwork([784, 100, 100, 10])
 
-    errors, val_errors = model.fit(X_train, y_train, learning_rate=0.4, num_iterations=5, optimizer="momentum")
+    errors, val_errors = model.fit(X_train, y_train, learning_rate=0.0007, num_iterations=10, optimizer="adam")
 
     # training + validation, take longer times
     # errors, val_errors = model.fit(X_train, y_train, learning_rate=0.4, num_iterations=5, validation_set=(X_val, y_val))
