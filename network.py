@@ -17,6 +17,11 @@ def sigmoid(x, deriv=False):
     return 1 / (1 + np.exp(-x))
 
 
+def softmax(x):
+    t = np.exp(x)
+    return t / np.sum(t, axis=0)
+
+
 def pre_process_dataset(path):
     train = pd.read_csv(path)
 
@@ -130,10 +135,12 @@ class NeuralNetwork(object):
     parameters = {}
     cache = {}
     size = 0
+    activation_layer = None
 
 
-    def __init__(self, layer):
+    def __init__(self, layer, activation_layer="softmax"):
         self.size = len(layer) - 1
+        self.activation_layer = activation_layer
         for i in range(1, len(layer)):
             self.parameters["W" + str(i)] = np.random.randn(layer[i], layer[i-1]) * 0.01
             self.parameters["b" + str(i)] = np.zeros((layer[i], 1))
@@ -148,9 +155,12 @@ class NeuralNetwork(object):
         for i in range(self.size):
             z = np.dot(self.parameters["W" + str(i + 1)], self.cache["A" + str(i)]) + self.parameters["b" + str(i + 1)]
 
-            # relu or sigmoid
+            # relu or (sigmoid/softmax)
             if i == self.size - 1:
-                a = sigmoid(z)
+                if self.activation_layer == "softmax":
+                    a = softmax(z)
+                elif self.activation_layer == "sigmoid":
+                    a = sigmoid(z)
             else:
                 a = relu(z)
 
@@ -162,7 +172,11 @@ class NeuralNetwork(object):
 
     def calculate_cost(self, AL, y):
         m = y.shape[1]
-        loss = np.sum(y * np.log(AL) + (1-y) * np.log(1-AL))
+        if self.activation_layer == "sigmoid":
+            loss = np.sum(y * np.log(AL) + (1-y) * np.log(1-AL))
+        elif self.activation_layer == "softmax":
+            loss = np.sum(y * np.log(AL))
+
         return loss / (-m)
 
 
